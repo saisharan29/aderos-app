@@ -1,0 +1,9 @@
+# Render.com deployment config (Week 4)
+# You already know this flow from your other 3 projects!
+services:
+  - type: web
+    name: aderos-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    plan: free
