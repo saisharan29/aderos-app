@@ -24,5 +24,5 @@ export const CRASH_CONFIG = {
 };
 
 // Backend — change to your Render URL in Week 4
-export const API_BASE_URL = 'http://localhost:8000';
+export const API_BASE_URL = 'https://aderos-api.onrender.com';
 // export const API_BASE_URL = 'https://aderos-api.onrender.com';
