@@ -2,6 +2,12 @@
 
 **Automatic crash detection for riders.** Detects an accident using phone sensors and alerts emergency contacts with GPS location — without the rider having to do anything.
 
+<p align="center">
+  <img src="screenshots/home.png" width="230">
+  <img src="screenshots/ride.png" width="230">
+  <img src="screenshots/alert.png" width="230">
+</p>
+
 When someone crashes alone, help arrives because a person noticed and called. That takes 8–12 minutes on average. ADEROS removes the human from that loop.
 
 ---
