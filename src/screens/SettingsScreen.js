@@ -1,13 +1,48 @@
 // Screen 5: Settings — sensitivity, language, about
 // Keep minimal for MVP. More options come post-launch based on feedback.
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, Switch, StyleSheet, TouchableOpacity } from 'react-native';
 import { COLORS } from '../utils/constants';
 
 export default function SettingsScreen() {
   const [highSensitivity, setHighSensitivity] = useState(false);
   const [french, setFrench] = useState(false);
+  // Load saved settings on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('settings');
+        if (saved) {
+          const s = JSON.parse(saved);
+          setHighSensitivity(s.highSensitivity ?? false);
+          setFrench(s.french ?? false);
+        }
+      } catch (e) {
+        console.log('[ADEROS] Could not load settings:', e);
+      }
+    })();
+  }, []);
+
+  // Save whenever a toggle changes
+  const saveSettings = async (next) => {
+    try {
+      await AsyncStorage.setItem('settings', JSON.stringify(next));
+    } catch (e) {
+      console.log('[ADEROS] Could not save settings:', e);
+    }
+  };
+
+  const toggleSensitivity = (v) => {
+    setHighSensitivity(v);
+    saveSettings({ highSensitivity: v, french });
+  };
+
+  const toggleFrench = (v) => {
+    setFrench(v);
+    saveSettings({ highSensitivity, french: v });
+  };
 
   return (
     <View style={styles.container}>
@@ -18,7 +53,7 @@ export default function SettingsScreen() {
         </View>
         <Switch
           value={highSensitivity}
-          onValueChange={setHighSensitivity}
+          onValueChange={toggleSensitivity}
           trackColor={{ true: COLORS.red }}
         />
       </View>
@@ -28,7 +63,7 @@ export default function SettingsScreen() {
           <Text style={styles.label}>Français</Text>
           <Text style={styles.hint}>Switch app language to French (Week 5)</Text>
         </View>
-        <Switch value={french} onValueChange={setFrench} trackColor={{ true: COLORS.red }} />
+        <Switch value={french} onValueChange={toggleFrench} trackColor={{ true: COLORS.red }} />
       </View>
 
       <TouchableOpacity style={styles.testButton}>
