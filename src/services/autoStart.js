@@ -11,7 +11,7 @@ import * as Location from 'expo-location';
 import { startCrashDetection, stopCrashDetection } from './crashDetection';
 
 const CONFIG = {
-  RIDE_START_SPEED_MS: 5.0,   // ~18 km/h — faster than running
+  RIDE_START_SPEED_MS: 0.5,   // ~18 km/h — faster than running
   RIDE_START_HOLD_MS: 20000,  // must hold speed 20s (filters GPS jitter)
   RIDE_END_SPEED_MS: 1.4,     // ~5 km/h
   RIDE_END_HOLD_MS: 180000,   // 3 min slow = ride over (red lights don't end rides)
