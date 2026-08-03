@@ -1,18 +1,23 @@
-// Screen 4: Crash Alert — the 30-second countdown
-// "Are you OK?" — if no response, auto-send SMS with GPS to emergency contacts
-// This screen must be IMPOSSIBLE to miss: full red, huge text, loud
+// Screen 4: Crash Alert — the countdown before help is called
+//
+// Must be impossible to miss: full red, huge text, vibration.
+// Reports honestly what actually happened — never claims help is coming
+// if the alert failed to send.
 
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Vibration } from 'react-native';
 import { COLORS, CRASH_CONFIG } from '../utils/constants';
 import { sendEmergencyAlert } from '../services/emergencyService';
 
-export default function CrashAlertScreen({ navigation }) {
+export default function CrashAlertScreen({ navigation, route }) {
   const [secondsLeft, setSecondsLeft] = useState(CRASH_CONFIG.COUNTDOWN_SECONDS);
   const [alertSent, setAlertSent] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const peakG = route?.params?.peakG ?? null;
 
   useEffect(() => {
-    // Vibrate in pattern to get attention
+    // Vibrate in a repeating pattern to get attention
     Vibration.vibrate([500, 500], true);
 
     const timer = setInterval(() => {
@@ -35,8 +40,9 @@ export default function CrashAlertScreen({ navigation }) {
   const fireAlert = async () => {
     Vibration.cancel();
     setAlertSent(true);
-    // Week 3: this sends real SMS with GPS location
-    await sendEmergencyAlert();
+    const r = await sendEmergencyAlert({ peakG });
+    setResult(r);
+    console.log('[ADEROS] Alert result:', r);
   };
 
   const cancelAlert = () => {
@@ -44,13 +50,43 @@ export default function CrashAlertScreen({ navigation }) {
     navigation.goBack();
   };
 
+  // ── Result state ──────────────────────────────────
   if (alertSent) {
+    const pending = result === null;
+    const ok = result?.success === true;
+    const manual = result?.method === 'device_sms_manual';
+
+    let headline;
+    let detail;
+    let bg;
+
+    if (pending) {
+      headline = 'SENDING ALERT…';
+      detail = 'Contacting your emergency contacts.';
+      bg = COLORS.charcoal;
+    } else if (ok && !manual) {
+      headline = 'HELP IS ON THE WAY';
+      detail = `Alert delivered to ${result.sent} contact${result.sent > 1 ? 's' : ''} with your location.`;
+      bg = COLORS.charcoal;
+    } else if (manual) {
+      headline = 'ACTION NEEDED';
+      detail = 'No connection to our servers. Your messages app is open — please press SEND.';
+      bg = '#8A6D00';
+    } else if (result?.reason === 'no_contacts') {
+      headline = 'NO CONTACTS SET';
+      detail = 'No emergency contacts were configured. Call 112 if you need help.';
+      bg = COLORS.red;
+    } else {
+      headline = 'ALERT NOT DELIVERED';
+      detail = 'We could not reach anyone. Call 112 if you need help.';
+      bg = COLORS.red;
+    }
+
     return (
-      <View style={[styles.container, { backgroundColor: COLORS.charcoal }]}>
-        <Text style={styles.sentTitle}>HELP IS ON THE WAY</Text>
-        <Text style={styles.sentText}>
-          Your emergency contacts have been notified with your location.
-        </Text>
+      <View style={[styles.container, { backgroundColor: bg }]}>
+        <Text style={styles.sentTitle}>{headline}</Text>
+        <Text style={styles.sentText}>{detail}</Text>
+
         <TouchableOpacity style={styles.okButton} onPress={() => navigation.navigate('Home')}>
           <Text style={styles.okButtonText}>I'm OK now</Text>
         </TouchableOpacity>
@@ -58,17 +94,22 @@ export default function CrashAlertScreen({ navigation }) {
     );
   }
 
+  // ── Countdown state ───────────────────────────────
   return (
     <View style={styles.container}>
       <Text style={styles.title}>CRASH DETECTED</Text>
       <Text style={styles.question}>Are you OK?</Text>
+
+      {peakG != null && (
+        <Text style={styles.impact}>Impact: {peakG.toFixed(1)}g</Text>
+      )}
 
       <Text style={styles.countdown}>{secondsLeft}</Text>
       <Text style={styles.countdownLabel}>
         Emergency contacts will be alerted{'\n'}with your GPS location
       </Text>
 
-      {/* HUGE cancel button — easy to hit even with shaking hands */}
+      {/* Huge target — easy to hit with shaking hands */}
       <TouchableOpacity style={styles.cancelButton} onPress={cancelAlert}>
         <Text style={styles.cancelButtonText}>I'M OK — CANCEL</Text>
       </TouchableOpacity>
@@ -90,24 +131,28 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: 'bold', color: '#FFF', letterSpacing: 2 },
   question: { fontSize: 20, color: '#FFD0D4', marginTop: 8 },
-  countdown: { fontSize: 140, fontWeight: 'bold', color: '#FFF', marginVertical: 10 },
+  impact: { fontSize: 13, color: '#FFD0D4', marginTop: 6, fontWeight: '600' },
+  countdown: { fontSize: 130, fontWeight: 'bold', color: '#FFF', marginVertical: 8 },
   countdownLabel: { color: '#FFD0D4', textAlign: 'center', fontSize: 14, lineHeight: 20 },
   cancelButton: {
     backgroundColor: '#FFF',
     paddingVertical: 22,
     paddingHorizontal: 40,
     borderRadius: 40,
-    marginTop: 50,
+    marginTop: 44,
     minWidth: '80%',
     alignItems: 'center',
   },
   cancelButtonText: { color: COLORS.red, fontSize: 20, fontWeight: 'bold' },
-  sendNowButton: { marginTop: 20, padding: 12 },
+  sendNowButton: { marginTop: 18, padding: 12 },
   sendNowText: { color: '#FFF', textDecorationLine: 'underline', fontSize: 14 },
-  sentTitle: { fontSize: 26, fontWeight: 'bold', color: '#FFF', letterSpacing: 1 },
-  sentText: { color: '#CCC', textAlign: 'center', marginTop: 16, fontSize: 15, lineHeight: 22 },
+
+  sentTitle: { fontSize: 26, fontWeight: 'bold', color: '#FFF', letterSpacing: 1, textAlign: 'center' },
+  sentText: { color: '#DDD', textAlign: 'center', marginTop: 16, fontSize: 15, lineHeight: 22 },
   okButton: {
-    backgroundColor: COLORS.green,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
     paddingVertical: 16,
     paddingHorizontal: 40,
     borderRadius: 30,
