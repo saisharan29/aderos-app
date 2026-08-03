@@ -64,10 +64,10 @@ export default function SettingsScreen() {
         setDiagnostics(r);
         Alert.alert(
           `Peak reading: ${r.peakG}g`,
-          `${r.device}\nInferred hardware range: \u00B1${r.inferredRange}g\n\n${r.verdict}`
+          `${r.device}\nInferred hardware range: \u00B1${r.inferredRange}g\nSamples: ${r.sampleCount}\n\n${r.verdict}`
         );
       } else {
-        Alert.alert('Not enough data', 'Shake harder and for at least 10 seconds.');
+        Alert.alert('Test inconclusive', r.hint);
       }
     } else {
       setLivePeak(0);
@@ -75,7 +75,7 @@ export default function SettingsScreen() {
       setCalibrating(true);
       Alert.alert(
         'Shake hard',
-        'Shake the phone as hard as you safely can for 10 seconds, then press stop.\n\nExpo Go\u2019s dev menu may appear \u2014 dismiss it and keep shaking.'
+        'Shake the phone as hard as you safely can for at least 10 seconds, then press stop.\n\nExpo Go\u2019s dev menu may appear \u2014 dismiss it and keep shaking.'
       );
     }
   };

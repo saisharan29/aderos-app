@@ -3,14 +3,19 @@
 // Phone accelerometers have a hardware full-scale range: typically ±2g, ±4g, ±8g or ±16g.
 // If a device saturates at 2g, a 3g crash threshold can NEVER fire — silently.
 // This module measures the observed ceiling and warns when detection is unreliable.
+//
+// Results are also sent to the backend to build a device compatibility dataset.
 
 import { Accelerometer } from 'expo-sensors';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '../utils/constants';
 
 // Install:  npx expo install expo-device
 
-const SATURATION_MARGIN = 0.05; // readings within 5% of peak = likely clipping
+const SATURATION_MARGIN = 0.05;  // readings within 5% of peak = likely clipping
+const MIN_SAMPLES = 500;         // ~5 s at 100 Hz — a real shake, not a tap
+const MIN_PEAK_G = 3.0;          // below this the test cannot measure a ceiling
 
 let sub = null;
 let peak = 0;
@@ -44,8 +49,21 @@ export async function stopCalibration() {
   sub?.remove();
   sub = null;
 
-  if (samples.length < 100) {
-    return { ok: false, reason: 'not_enough_data' };
+  // Guard against a false CRITICAL from a too-short or too-gentle test.
+  // A stale/low peak must never be reported as hardware saturation.
+  if (samples.length < MIN_SAMPLES) {
+    return {
+      ok: false,
+      reason: 'too_short',
+      hint: `Only ${samples.length} samples captured. Shake hard for at least 10 seconds before stopping.`,
+    };
+  }
+  if (peak < MIN_PEAK_G) {
+    return {
+      ok: false,
+      reason: 'too_gentle',
+      hint: `Peak was only ${peak.toFixed(1)}g. Shake much harder — a gentle test cannot reach the sensor ceiling.`,
+    };
   }
 
   const sorted = [...samples].sort((a, b) => a - b);
@@ -53,7 +71,7 @@ export async function stopCalibration() {
 
   // Infer the hardware range from the observed peak
   const ranges = [2, 4, 8, 16];
-  const inferred = ranges.find(r => peak <= r * 1.05) ?? 16;
+  const inferred = ranges.find((r) => peak <= r * 1.05) ?? 16;
 
   // If many samples pile up at the ceiling, it is clipping rather than
   // simply "you didn't shake hard enough"
@@ -66,6 +84,7 @@ export async function stopCalibration() {
     osVersion: Device.osVersion,
     peakG: +peak.toFixed(2),
     p99G: +p99.toFixed(2),
+    sampleCount: samples.length,
     inferredRange: inferred,
     saturating,
     reliable: inferred >= 8,
@@ -75,6 +94,15 @@ export async function stopCalibration() {
 
   await AsyncStorage.setItem('sensorDiagnostics', JSON.stringify(result));
   console.log('[ADEROS] Sensor diagnostics:', result);
+
+  // Contribute to the device compatibility dataset — fire and forget.
+  // No personal data, only device model and sensor range.
+  fetch(`${API_BASE_URL}/api/v1/device-diagnostics`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(result),
+  }).catch(() => {});
+
   return result;
 }
 
@@ -101,15 +129,14 @@ export async function getStoredDiagnostics() {
 }
 
 /**
- * Returns a safe crash threshold for this device, or null if detection
- * is not viable at all.
+ * Returns a safe crash threshold for this device, or the default if untested.
+ * Never allows a threshold above ~70% of the hardware ceiling, otherwise real
+ * impacts clip before they can cross it.
  */
 export async function getSafeThreshold(defaultThreshold = 3.0) {
   const d = await getStoredDiagnostics();
   if (!d?.ok) return defaultThreshold;
 
-  // Never set the threshold above ~70% of the hardware ceiling —
-  // otherwise real impacts clip before they cross it.
   const ceiling = d.inferredRange * 0.7;
   return Math.min(defaultThreshold, ceiling);
 }
